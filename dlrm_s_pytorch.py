@@ -551,7 +551,7 @@ class DLRM_Net(nn.Module):
             # Single device training (CPU or single GPU)
             return self.sequential_forward(dense_x, lS_o, lS_i)
         else:
-            # Multi-GPU training on single machine
+            # Single-node multi-GPU parallelism
             return self.parallel_forward(dense_x, lS_o, lS_i)
 
     def distributed_forward(self, dense_x, lS_o, lS_i):
