@@ -128,15 +128,19 @@ def time_wrap(use_gpu):
 
 def dlrm_wrap(X, lS_o, lS_i, use_gpu, device, ndevices=1):
     with record_function("DLRM forward"):
-        if use_gpu:  # .cuda()
-            # lS_i can be either a list of tensors or a stacked tensor.
-            # Handle each case below:
+        if use_gpu:
+            # Move tensors to GPU if using single device
             if ndevices == 1:
+                # Handle sparse feature indices (lS_i) which can be either:
+                # - A list of tensors
+                # - A single stacked tensor
                 lS_i = (
                     [S_i.to(device) for S_i in lS_i]
                     if isinstance(lS_i, list)
                     else lS_i.to(device)
                 )
+                
+                # Similarly handle sparse feature offsets (lS_o)
                 lS_o = (
                     [S_o.to(device) for S_o in lS_o]
                     if isinstance(lS_o, list)
