@@ -241,51 +241,66 @@ class DLRM_Net(nn.Module):
         return torch.nn.Sequential(*layers)
 
     def create_emb(self, m, ln, weighted_pooling=None):
+        """Creates embedding tables with optional weighted pooling.
+        
+        Args:
+            m: Embedding dimension
+            ln: Number of embeddings for each table
+            weighted_pooling: Type of weighted pooling to use
+        
+        Returns:
+            emb_l: List of embedding tables
+            v_W_l: List of optional weights for pooling
+        """
         emb_l = nn.ModuleList()
         v_W_l = []
         for i in range(0, ln.size):
+            # Skip if not in local embedding indices for distributed training
             if ext_dist.my_size > 1:
                 if i not in self.local_emb_indices:
                     continue
             n = ln[i]
 
-            # construct embedding operator
+            # Choose embedding type based on table size and flags
             if self.qr_flag and n > self.qr_threshold:
+                # Use QR factorized embeddings for large tables
                 EE = QREmbeddingBag(
                     n,
-                    m,
+                    m, 
                     self.qr_collisions,
                     operation=self.qr_operation,
                     mode="sum",
                     sparse=True,
                 )
             elif self.md_flag and n > self.md_threshold:
+                # Use mixed dimension embeddings for large tables
                 base = max(m)
                 _m = m[i] if n > self.md_threshold else base
                 EE = PrEmbeddingBag(n, _m, base)
-                # use np initialization as below for consistency...
+                
+                # Initialize weights uniformly
                 W = np.random.uniform(
                     low=-np.sqrt(1 / n), high=np.sqrt(1 / n), size=(n, _m)
                 ).astype(np.float32)
                 EE.embs.weight.data = torch.tensor(W, requires_grad=True)
             else:
+                # Use standard embedding bag
                 EE = nn.EmbeddingBag(n, m, mode="sum", sparse=True)
-                # initialize embeddings
-                # nn.init.uniform_(EE.weight, a=-np.sqrt(1 / n), b=np.sqrt(1 / n))
+                
+                # Initialize weights uniformly
                 W = np.random.uniform(
                     low=-np.sqrt(1 / n), high=np.sqrt(1 / n), size=(n, m)
                 ).astype(np.float32)
-                # approach 1
                 EE.weight.data = torch.tensor(W, requires_grad=True)
-                # approach 2
-                # EE.weight.data.copy_(torch.tensor(W))
-                # approach 3
-                # EE.weight = Parameter(torch.tensor(W),requires_grad=True)
+
+            # Add optional weights for pooling
             if weighted_pooling is None:
                 v_W_l.append(None)
             else:
                 v_W_l.append(torch.ones(n, dtype=torch.float32))
+                
             emb_l.append(EE)
+            
         return emb_l, v_W_l
 
     def __init__(
