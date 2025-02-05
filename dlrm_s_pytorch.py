@@ -481,30 +481,39 @@ class DLRM_Net(nn.Module):
         self.quantize_bits = bits
 
     def interact_features(self, x, ly):
+        """Processes interaction between dense and sparse features.
+
+        Args:
+            x (torch.Tensor): Dense features tensor of shape (batch_size, d)
+            ly (list): List of sparse feature embedding tensors.
+
+        Returns:
+            torch.Tensor: Processed feature interactions
+                For dot: Concatenated dense features and dot product interactions
+                For cat: Simple concatenation of dense and sparse features
+        """
         if self.arch_interaction_op == "dot":
-            # concatenate dense and sparse features
+            # Concatenate dense and sparse features into a 3D tensor of shape (batch_size, num_features, d)
             (batch_size, d) = x.shape
             T = torch.cat([x] + ly, dim=1).view((batch_size, -1, d))
-            # perform a dot product
+            
+            # Compute pairwise dot products between all feature vectors
             Z = torch.bmm(T, torch.transpose(T, 1, 2))
-            # append dense feature with the interactions (into a row vector)
-            # approach 1: all
-            # Zflat = Z.view((batch_size, -1))
-            # approach 2: unique
+            
+            # Extract unique pairwise interactions from the upper triangular portion
             _, ni, nj = Z.shape
-            # approach 1: tril_indices
-            # offset = 0 if self.arch_interaction_itself else -1
-            # li, lj = torch.tril_indices(ni, nj, offset=offset)
-            # approach 2: custom
             offset = 1 if self.arch_interaction_itself else 0
             li = torch.tensor([i for i in range(ni) for j in range(i + offset)])
             lj = torch.tensor([j for i in range(nj) for j in range(i + offset)])
             Zflat = Z[:, li, lj]
-            # concatenate dense features and interactions
+            
+            # Concatenate original dense features with the interaction terms
             R = torch.cat([x] + [Zflat], dim=1)
+            
         elif self.arch_interaction_op == "cat":
-            # concatenation features (into a row vector)
+            # Simply concatenate dense and sparse features along feature dimension
             R = torch.cat([x] + ly, dim=1)
+            
         else:
             sys.exit(
                 "ERROR: --arch-interaction-op="
@@ -513,7 +522,6 @@ class DLRM_Net(nn.Module):
             )
 
         return R
-
     def forward(self, dense_x, lS_o, lS_i):
         if ext_dist.my_size > 1:
             # multi-node multi-device run
