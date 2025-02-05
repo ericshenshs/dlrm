@@ -537,14 +537,21 @@ class DLRM_Net(nn.Module):
 
         return R
     def forward(self, dense_x, lS_o, lS_i):
+        """Main forward pass routing based on execution environment.
+        
+        Routes to appropriate forward implementation:
+        - Distributed forward for multi-node multi-GPU execution
+        - Sequential forward for single device execution  
+        - Parallel forward for single-node multi-GPU execution
+        """
         if ext_dist.my_size > 1:
-            # multi-node multi-device run
+            # Multi-node distributed training across machines
             return self.distributed_forward(dense_x, lS_o, lS_i)
         elif self.ndevices <= 1:
-            # single device run
+            # Single device training (CPU or single GPU)
             return self.sequential_forward(dense_x, lS_o, lS_i)
         else:
-            # single-node multi-device run
+            # Multi-GPU training on single machine
             return self.parallel_forward(dense_x, lS_o, lS_i)
 
     def distributed_forward(self, dense_x, lS_o, lS_i):
