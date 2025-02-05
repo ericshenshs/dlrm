@@ -614,25 +614,20 @@ class DLRM_Net(nn.Module):
         return z
 
     def sequential_forward(self, dense_x, lS_o, lS_i):
-        # process dense features (using bottom mlp), resulting in a row vector
+        # Process dense features through bottom MLP to get a row vector
         x = self.apply_mlp(dense_x, self.bot_l)
-        # debug prints
-        # print("intermediate")
-        # print(x.detach().cpu().numpy())
 
-        # process sparse features(using embeddings), resulting in a list of row vectors
+        # Process sparse features through embeddings to get list of row vectors
+        # Looks up and processes sparse features through embedding tables
         ly = self.apply_emb(lS_o, lS_i, self.emb_l, self.v_W_l)
-        # for y in ly:
-        #     print(y.detach().cpu().numpy())
 
-        # interact features (dense and sparse)
+        # Combine dense and sparse features through interaction
         z = self.interact_features(x, ly)
-        # print(z.detach().cpu().numpy())
 
-        # obtain probability of a click (using top mlp)
+        # Pass through top MLP to get click probability
         p = self.apply_mlp(z, self.top_l)
 
-        # clamp output if needed
+        # Optionally clamp output to threshold range
         if 0.0 < self.loss_threshold and self.loss_threshold < 1.0:
             z = torch.clamp(p, min=self.loss_threshold, max=(1.0 - self.loss_threshold))
         else:
